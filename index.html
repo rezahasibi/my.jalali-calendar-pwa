@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقویم شیفت کاری</title>
+    <!-- Link to PWA manifest -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Theme color for browser interface -->
+    <meta name="theme-color" content="#3B82F6">
+    <!-- Apple Touch Icon for iOS -->
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light gray background */
+        }
+        /* Custom styles for the calendar grid */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr); /* 7 columns for days of the week */
+            gap: 4px; /* Small gap between cells */
+        }
+        /* Style for day cells */
+        .day-cell {
+            padding: 2px; /* Reduced padding for better fit */
+            text-align: center;
+            border-radius: 8px; /* Rounded corners for cells */
+            display: flex;
+            flex-direction: column; /* Stack day number and shift letter vertically */
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1 / 1; /* Make cells square */
+            position: relative; /* For positioning elements within the cell */
+            cursor: pointer; /* Indicate clickable */
+            border: 1px solid transparent; /* Default transparent border */
+            transition: all 0.1s ease-in-out; /* Smooth transition for hover/holiday effects */
+        }
+        /* Styling for the day number */
+        .day-cell .day-number {
+            font-size: 0.8rem; /* Adjusted font size for day number */
+            font-weight: normal;
+            color: #4a5568; /* Darker gray for day number */
+            margin-bottom: 0px; /* Reduced space between day number and shift */
+            line-height: 1.1; /* Adjust line height for better spacing */
+        }
+        /* Styling for the shift letter */
+        .day-cell .shift-letter {
+            font-size: 1rem; /* Adjusted font size for shift letter */
+            font-weight: bold;
+            color: white; /* White text for shift letters */
+            line-height: 1; /* Adjust line height to prevent extra space */
+        }
+        /* Hover effect for clickable days */
+        .day-cell.hoverable:hover {
+            box-shadow: 0 0 0 2px #93c5fd; /* Light blue ring on hover */
+        }
+        /* Style for today's date - overrides shift color */
+        .day-cell.today {
+            background-color: #3b82f6 !important; /* Blue background for today */
+            border: 2px solid #2563eb !important; /* Stronger blue border for today */
+        }
+        /* Ensure today's text is white */
+        .day-cell.today .day-number,
+        .day-cell.today .shift-letter {
+            color: white !important;
+        }
+
+        /* Indicator for days with notes */
+        .day-cell.has-notes::before {
+            content: '';
+            position: absolute;
+            bottom: 4px; /* Position it at the bottom left */
+            left: 4px;
+            width: 6px;
+            height: 6px;
+            background-color: #ef4444; /* Red dot */
+            border-radius: 50%;
+            pointer-events: none; /* Do not interfere with click on day cell */
+        }
+
+        /* Style for official holidays - now adds a border, keeps original background/shift info */
+        .day-cell.holiday {
+            border: 2px solid #dc2626 !important; /* Red border for holidays */
+            /* Background color remains the shift color */
+        }
+        /* For holiday cells, ensure text colors are still good with shift background */
+        .day-cell.holiday .day-number {
+            color: #4a5568 !important; /* Example: Darker gray for holiday day numbers */
+        }
+        .day-cell.holiday .shift-letter {
+            color: white !important; /* Example: Keep shift letter white if background is colored */
+        }
+
+
+        /* Modal specific styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 450px;
+            max-height: 80vh; /* Limit height for scrollability */
+            overflow-y: auto; /* Enable scrolling for long content */
+            position: relative;
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #4a5568;
+        }
+        .note-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .note-item:last-child {
+            border-bottom: none;
+        }
+        .note-text {
+            flex-grow: 1;
+            text-align: right; /* Right-align note text */
+            margin-left: 8px; /* Space from delete button */
+        }
+        .delete-note-button {
+            background-color: #ef4444;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        /* Custom color input for shift types */
+        .color-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 40px; /* Adjust as needed */
+            height: 40px; /* Adjust as needed */
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #ccc;
+        }
+        .color-input-wrapper input[type="color"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0; /* Hide the default color picker */
+            cursor: pointer;
+        }
+        .color-display {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* Custom Message Box Styles */
+        #message-box {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -60%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        /* Drag and Drop styles */
+        .draggable-shift {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            margin: 4px;
+            border-radius: 6px;
+            font-weight: bold;
+            color: white;
+            cursor: grab;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+        }
+        .draggable-shift:active {
+            cursor: grabbing;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transform: scale(1.05);
+        }
+        .current-cycle-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            font-weight: bold;
+            color: white;
+            cursor: grab;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .current-cycle-item .delete-button {
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-right: -5px; /* Pull it slightly to the right */
+            transition: background-color 0.2s;
+        }
+        .current-cycle-item .delete-button:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .drop-zone {
+            border: 2px dashed #cbd5e1; /* border-gray-300 */
+            min-height: 80px;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8fafc; /* bg-gray-50 */
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start; /* Align content to top */
+        }
+        .drop-zone.drag-over {
+            border-color: #3b82f6; /* border-blue-500 */
+            background-color: #eff6ff; /* bg-blue-50 */
+        }
+        .drop-zone.drag-over-insert-before {
+            outline: 2px solid #2563eb; /* outline-blue-700 */
+            box-shadow: inset 2px 0 0 0 #2563eb; /* Left border for insert point */
+        }
+        .drop-zone.drag-over-insert-after {
+            outline: 2px solid #2563eb; /* outline-blue-700 */
+            box-shadow: inset -2px 0 0 0 #2563eb; /* Right border for insert point */
+        }
+        .dragging {
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm border border-gray-200">
+        <!-- Calendar Header -->
+        <div class="flex justify-between items-center mb-4">
+            <button id="prev-year" class="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+            </button>
+            <button id="prev-month" class="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <h2 id="calendar-header-text" class="text-xl font-semibold text-gray-800 flex-grow text-center mx-2"></h2>
+            <button id="next-month" class="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+            <button id="next-year" class="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-between items-center mb-4">
+            <button id="go-to-today" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md flex-grow mr-2">
+                امروز
+            </button>
+            <button id="open-summary" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md flex-grow mx-1">
+                خلاصه
+            </button>
+            <button id="open-settings" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md flex-grow ml-2">
+                تنظیمات
+            </button>
+        </div>
+
+
+        <!-- Days of the Week Header -->
+        <div class="calendar-grid text-sm font-medium text-gray-500 mb-2">
+            <div class="day-cell">ش</div> <!-- شنبه -->
+            <div class="day-cell">ی</div> <!-- یکشنبه -->
+            <div class="day-cell">د</div> <!-- دوشنبه -->
+            <div class="day-cell">س</div> <!-- سه شنبه -->
+            <div class="day-cell">چ</div> <!-- چهارشنبه -->
+            <div class="day-cell">پ</div> <!-- پنجشنبه -->
+            <div class="day-cell">ج</div> <!-- جمعه -->
+        </div>
+
+        <!-- Calendar Days Grid -->
+        <div id="calendar-days-grid" class="calendar-grid text-gray-700">
+            <!-- Day cells will be inserted here by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Shift Routine Modal -->
+    <div id="routine-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="modal-close-button" onclick="closeModal('routine-modal')">
+                &times;
+            </button>
+            <h3 id="routine-modal-title" class="text-xl font-bold mb-2 text-gray-800"></h3>
+            <p id="holiday-info" class="text-red-600 text-sm mb-4 font-semibold hidden"></p> <!-- For holiday info -->
+            <ul id="routine-list" class="list-disc list-inside text-gray-700 space-y-2 mb-4">
+                <!-- Routine items will be populated here -->
+            </ul>
+            <div class="flex justify-between mt-4 space-x-2 rtl:space-x-reverse">
+                <button id="edit-shift-routine-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md flex-grow">
+                    ویرایش برنامه شیفت
+                </button>
+                <button id="open-notes-modal-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md flex-grow">
+                    افزودن/مشاهده یادداشت‌ها
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Modal -->
+    <div id="summary-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="modal-close-button" onclick="closeModal('summary-modal')">
+                &times;
+            </button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800">خلاصه شیفت و یادداشت</h3>
+
+            <div class="mb-6">
+                <h4 class="text-lg font-semibold mb-2 text-gray-700">خلاصه ماه <span id="summary-month-name"></span>:</h4>
+                <div id="monthly-shift-summary" class="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <!-- Monthly shift summary will be populated here -->
+                </div>
+                <p class="text-sm text-gray-600">تعداد کل یادداشت‌ها در این ماه: <span id="monthly-note-count"></span></p>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-semibold mb-2 text-gray-700">خلاصه سال <span id="summary-year-number"></span>:</h4>
+                <div id="yearly-shift-summary" class="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <!-- Yearly shift summary will be populated here -->
+                </div>
+                <p class="text-sm text-gray-600">تعداد کل یادداشت‌ها در این سال: <span id="yearly-note-count"></span></p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="modal-close-button" onclick="closeModal('settings-modal')">
+                &times;
+            </button>
+            <h3 class="text-xl font-bold mb-4 text-gray-800">تنظیمات تقویم و شیفت</h3>
+
+            <!-- Shift Cycle Start Date Setting -->
+            <div class="mb-6">
+                <label for="shift-start-year" class="block text-sm font-medium text-gray-700 mb-1">
+                    تاریخ شروع سیکل کاری (اولین روز شیفت: ۲۸ مرداد ۱۴۰۴):
+                </label>
+                <div class="flex space-x-2 rtl:space-x-reverse">
+                    <input type="number" id="shift-start-year" class="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-center" placeholder="سال" min="1300" max="1500">
+                    <input type="number" id="shift-start-month" class="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-center" placeholder="ماه" min="1" max="12">
+                    <input type="number" id="shift-start-day" class="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-center" placeholder="روز" min="1" max="31">
+                </div>
+            </div>
+
+            <!-- Manage Custom Shift Types -->
+            <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <h4 class="text-lg font-semibold mb-3 text-gray-800">مدیریت انواع شیفت (مثال: morning, night)</h4>
+                <div id="custom-shift-types-list" class="mb-4 space-y-2">
+                    <!-- Custom shift types will be listed here -->
+                </div>
+
+                <h5 class="text-md font-medium mb-2 text-gray-700">افزودن شیفت جدید:</h5>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <input type="text" id="new-shift-id" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="شناسه (لاتین، بدون فاصله)" aria-label="شناسه شیفت">
+                    <input type="text" id="new-shift-name" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="نام شیفت (فارسی)" aria-label="نام شیفت">
+                    <input type="text" id="new-shift-letter" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="حرف شیفت (تک حرف)" maxlength="1" aria-label="حرف شیفت">
+                    <div class="flex items-center space-x-2 rtl:space-x-reverse">
+                        <label for="new-shift-color" class="text-sm text-gray-700">رنگ:</label>
+                        <div class="color-input-wrapper flex-shrink-0">
+                            <input type="color" id="new-shift-color" value="#60a5fa" aria-label="رنگ شیفت">
+                            <span class="color-display" style="background-color: #60a5fa;"></span>
+                        </div>
+                    </div>
+                </div>
+                <button id="add-new-shift-type" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md w-full">
+                    افزودن شیفت
+                </button>
+            </div>
+
+            <!-- Define Custom Shift Cycle - Visual Builder -->
+            <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-blue-50">
+                <h4 class="text-lg font-semibold mb-3 text-gray-800">تعریف بصری الگوی سیکل کاری</h4>
+                <p class="text-sm text-gray-700 mb-2">
+                    شیفت‌ها را از لیست زیر بکشید و در ناحیه "الگوی سیکل کاری شما" رها کنید تا الگوی خود را بسازید.
+                </p>
+                
+                <div class="mb-4">
+                    <h5 class="text-md font-medium text-gray-700 mb-2">شیفت‌های موجود:</h5>
+                    <div id="available-shift-types-container" class="flex flex-wrap border border-gray-300 p-2 rounded-lg bg-white min-h-[40px]">
+                        <!-- Draggable shift types will be rendered here -->
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="text-md font-medium text-gray-700 mb-2">الگوی سیکل کاری شما:</h5>
+                    <div id="current-shift-cycle-visual-container" class="drop-zone flex flex-wrap gap-2 items-center min-h-[80px]">
+                        <!-- Dropped shift types will be rendered here -->
+                    </div>
+                    <div id="current-cycle-visual-preview" class="text-sm text-gray-600 mt-2"></div>
+                </div>
+
+                <h4 class="text-lg font-semibold mb-3 text-gray-800 mt-6">یا تعریف متنی الگوی سیکل کاری</h4>
+                <p class="text-sm text-gray-700 mb-2">
+                    (این بخش به صورت خودکار با بخش بصری همگام‌سازی می‌شود)
+                    <br>شناسه‌های شیفت را به ترتیب سیکل کاری خود، هر کدام در یک خط یا با کاما جدا کنید.
+                    <br>مثال: <code>morning, afternoon, afternoon, night, off</code>
+                </p>
+                <textarea id="custom-shift-cycle-input" rows="6" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm mb-2" placeholder="شناسه شیفت اول&#10;شناسه شیفت دوم&#10;..."></textarea>
+                <div id="current-cycle-text-preview" class="text-sm text-gray-600 mb-2"></div>
+            </div>
+
+            <!-- Routine Editor for each Shift Type -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">ویرایش برنامه‌های روزانه شیفت:</label>
+                <div id="routine-editors-container" class="space-y-4">
+                    <!-- Routine textareas will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Export/Import Data -->
+            <div class="mb-6 p-4 border border-gray-200 rounded-lg bg-yellow-50">
+                <h4 class="text-lg font-semibold mb-3 text-gray-800">پشتیبان‌گیری و بازیابی اطلاعات</h4>
+                <button id="export-data-button" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md w-full mb-3">
+                    خروجی گرفتن اطلاعات (پشتیبان‌گیری)
+                </button>
+                <h5 class="text-md font-medium mb-2 text-gray-700">ورودی گرفتن اطلاعات (بازیابی):</h5>
+                <input type="file" id="import-file-input" accept=".json" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 mb-2">
+                <button id="import-data-button" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md w-full">
+                    بارگذاری اطلاعات
+                </button>
+            </div>
+
+            <button id="save-settings-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md w-full">
+                ذخیره تنظیمات
+            </button>
+        </div>
+    </div>
+
+    <!-- Notes Modal -->
+    <div id="notes-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="modal-close-button" onclick="closeModal('notes-modal')">
+                &times;
+            </button>
+            <h3 id="notes-modal-title" class="text-xl font-bold mb-4 text-gray-800">یادداشت‌های روز</h3>
+            <div id="notes-list" class="mb-4 space-y-2">
+                <!-- Notes will be populated here -->
+            </div>
+            <div class="mb-4">
+                <label for="new-note-textarea" class="block text-sm font-medium text-gray-700 mb-1">یادداشت جدید:</label>
+                <textarea id="new-note-textarea" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm mb-2" placeholder="یادداشت جدید را اینجا بنویسید..."></textarea>
+                <div class="flex items-center justify-end">
+                    <label for="reminder-time" class="text-sm font-medium text-gray-700 mr-2">زمان یادآور (اختیاری):</label>
+                    <input type="time" id="reminder-time" class="p-1 border border-gray-300 rounded-lg text-sm">
+                </div>
+            </div>
+            <button id="add-note-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200 shadow-md w-full">
+                افزودن یادداشت
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="message-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg shadow-xl border border-gray-200 z-[1001] hidden text-center max-w-xs w-full">
+        <h4 id="message-box-title" class="text-lg font-bold mb-3 text-gray-800"></h4>
+        <p id="message-box-content" class="text-gray-700 mb-4"></p>
+        <button id="message-box-close" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-xl transition-colors duration-200">
+            باشه
+        </button>
+    </div>
+
+
+    <script>
+        // Register Service Worker
+        // Service Workers require a secure origin (HTTPS) or localhost.
+        // In this sandboxed environment (running from a blob: URL), Service Worker registration
+        // will fail with a "The URL protocol of the script (':') is not supported" error.
+        // Therefore, the registration is commented out for this specific environment.
+        // For actual PWA deployment on a web server, uncomment the following block.
+        /*
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered with scope:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
+        */
+        console.warn('Service Worker registration is disabled in this environment (blob: URL protocol is not supported). For full PWA functionality, host the application on a web server (HTTPS or localhost).');
+
+
+        // توابع تبدیل اعداد انگلیسی به فارسی
+        function convertToPersianDigits(number) {
+            const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+            return String(number).split('').map(digit => {
+                if (digit >= '0' && digit <= '9') {
+                    return persianDigits[parseInt(digit)];
+                }
+                return digit;
+            }).join('');
+        }
+
+        // توابع تبدیل تاریخ جلالی به میلادی و بالعکس
+        /**
+         * Converts a Jalali date to a Gregorian date.
+         * @param {number} jy Jalali year.
+         * @param {number} jm Jalali month (1-12).
+         * @param {number} jd Jalali day (1-31).
+         * @returns {number[]} An array [GregorianYear, GregorianMonth, GregorianDay].
+         */
+        function jalali_to_gregorian(jy, jm, jd) {
+            var g_days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            var j_days_in_month = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
+            var jalali_days;
+
+            jy = parseInt(jy);
+            jm = parseInt(jm);
+            jd = parseInt(jd);
+
+            jalali_days = (jy - 979) * 365 + Math.floor((jy - 979) / 33) * 8 + Math.floor(((jy - 979) % 33 + 3) / 4);
+            for (let i = 0; i < jm - 1; ++i) {
+                jalali_days += j_days_in_month[i];
+            }
+            jalali_days += jd - 1;
+
+            let gy = 400 * Math.floor(jalali_days / 146097);
+            jalali_days %= 146097;
+
+            if (jalali_days > 36524) {
+                gy += 100 * Math.floor(--jalali_days / 36524);
+                jalali_days %= 36524;
+                if (jalali_days >= 365) {
+                    ++jalali_days;
+                }
+            }
+
+            gy += 4 * Math.floor(jalali_days / 1461);
+            jalali_days %= 1461;
+
+            if (jalali_days > 365) {
+                gy += Math.floor(--jalali_days / 365);
+                jalali_days %= 365;
+            }
+
+            let gd = jalali_days + 1;
+
+            let gm = 0;
+            let i_jtg;
+            for (i_jtg = 0; i_jtg < 11 && gd > g_days_in_month[i_jtg] + ((i_jtg == 1) && ((gy % 4 == 0 && gy % 100 != 0) || (gy % 400 == 0))); ++i_jtg) {
+                gd -= g_days_in_month[i_jtg] + ((i_jtg == 1) && ((gy % 4 == 0 && gy % 100 != 0) || (gy % 400 == 0)));
+            }
+            gm = i_jtg + 1;
+
+            return [gy, gm, gd];
+        }
+
+        /**
+         * Converts a Gregorian date to a Jalali date.
+         * @param {number} gy Gregorian year.
+         * @param {number} gm Gregorian month (1-12).
+         * @param {number} gd Gregorian day (1-31).
+         * @returns {number[]} An array [JalaliYear, JalaliMonth, JalaliDay].
+         */
+        function gregorian_to_jalali(gy, gm, gd) {
+            var j_days_in_month = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
+            var g_days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            var g_day_no;
+
+            gy = parseInt(gy);
+            gm = parseInt(gm);
+            gd = parseInt(gd);
+
+            g_day_no = 365 * (gy - 1) + Math.floor((gy + 3) / 4) - Math.floor((gy + 99) / 100) + Math.floor((gy + 399) / 400);
+            for (let i = 0; i < gm - 1; ++i) {
+                g_day_no += g_days_in_month[i];
+            }
+            if (gm > 2 && ((gy % 4 == 0 && gy % 100 != 0) || (gy % 400 == 0))) {
+                ++g_day_no;
+            }
+            g_day_no += gd - 1;
+
+            let j_day_no = g_day_no - 79;
+
+            let jy = 1600 + 400 * Math.floor(j_day_no / 146097);
+            j_day_no %= 146097;
+
+            if (j_day_no >= 36525) {
+                jy += 100 * Math.floor(--j_day_no / 36524);
+                j_day_no %= 36524;
+                if (j_day_no >= 365) {
+                    ++j_day_no;
+                }
+            }
+
+            jy += 4 * Math.floor(j_day_no / 1461);
+            j_day_no %= 1461;
+
+            if (j_day_no >= 366) {
+                jy += Math.floor(--j_day_no / 365);
+                j_day_no %= 365;
+            }
+
+            let jm = 0;
+            let i_gtj;
+            for (i_gtj = 0; i_gtj < 11 && j_day_no >= j_days_in_month[i_gtj]; ++i_gtj) {
+                j_day_no -= j_days_in_month[i_gtj];
+            }
+            jm = i_gtj + 1;
+            let jd = j_day_no + 1;
+
+            return [jy, jm, jd];
+        }
+
+        /**
+         * Checks if a given Jalali year is a leap year.
+         * @param {number} year Jalali year.
+         * @returns {boolean} True if it's a leap year, false otherwise.
+         */
+        function isJalaliLeapYear(year) {
+            const mod = year % 33;
+            return mod === 1 || mod === 5 || mod === 9 || mod === 13 || mod === 17 || mod === 22 || mod === 26 || mod === 30;
+        }
+
+        /**
+         * Calculates an absolute day number for a given Jalali date.
+         * @param {number} jy Jalali year.
+         * @param {number} jm Jalali month (1-12).
+         * @param {number} jd Jalali day (1-31).
+         * @returns {number} Absolute day number since a fixed Jalali epoch.
+         */
+        function getJalaliAbsoluteDay(jy, jm, jd) {
+            const gDate = jalali_to_gregorian(jy, jm, jd);
+            const gregorianDate = new Date(gDate[0], gDate[1] - 1, gDate[2]);
+            const referenceDate = new Date(2000, 0, 1); // Fixed reference point for absolute day calculation
+            const diffTime = gregorianDate.getTime() - referenceDate.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        }
+
+        // Global variables for calendar state
+        let currentJYear;
+        let currentJMonth;
+        let currentJDay;
+
+        // Today's date (fixed for demonstration)
+        let todayJYear = 1404;
+        let todayJMonth = 5; // مرداد
+        let todayJDay = 27;
+
+        // User settings (shift cycle start, daily routines, custom shift types)
+        let userSettings = {};
+
+        // User events/notes
+        // Each note object can now have: { text: "...", reminderTime: "HH:MM" | null, reminderDate: "YYYY-MM-DD" }
+        let userEvents = {}; // Stores notes keyed by "YYYY-MM-DD" Jalali string
+
+        // Default Shift types (cannot be deleted by user)
+        const defaultShiftTypes = [
+            { id: "morning", name: "صبح", letter: "ص", color: "#86efac" }, /* bg-green-300 */
+            { id: "afternoon", name: "عصر", letter: "ع", color: "#fdba74" }, /* bg-orange-300 */
+            { id: "night", name: "شب", letter: "ش", color: "#d8b4fe" }, /* bg-purple-300 */
+            { id: "off", name: "آف", letter: "آ", color: "#fca5a5" } /* bg-red-300 */
+        ];
+        let allShiftTypes = []; // This will hold default + custom shift types
+
+        // Dynamic cycle length, will be determined by userSettings.customShiftCycle.length
+        let currentShiftCycleLength = 0;
+
+        const jalaliMonthNames = [
+            "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+            "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+        ];
+        const jalaliMonthDays = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
+
+
+        // Default daily routines (as provided by you)
+        const defaultDailyRoutines = {
+            "morning": [ // شیفت صبح: ۰۶:۰۰ تا ۱۶:۰۰ کار
+                "۰۵:۰۰ - ۰۵:۴۵: بیدار شدن، دوش آب ولرم، نوشیدن آب، آماده شدن",
+                "۰۵:۴۵ - ۰۶:۰۰: میان‌وعده سبک قبل از کار (مثلاً میوه و چند عدد بادام)",
+                "۱۶:۰۰ - ۱۶:۳۰: بازگشت از کار، استراحت کوتاه، نوشیدن آب",
+                "۱۶:۳۰ - ۱۸:۰۰: زمان با خانواده (گفتگو با همسر و فرزندان، کمک به تکالیف فرزند ۶ ساله، بازی کوتاه با کوچکترها)",
+                "۱۸:۰۰ - ۱۹:۰۰: فعالیت بدنی ملایم (پیاده‌روی سریع در پارک یا محله، کشش سبک)",
+                "۱۹:۰۰ - ۲۰:۰۰: شام سبک و سالم با خانواده",
+                "۲۰:۰۰ - ۲۱:۰۰: زمان آزاد با خانواده/همسر، مطالعه، گوش دادن به موسیقی آرام",
+                "۲۱:۰۰ - ۲۱:۳۰: آماده شدن برای خواب (کاهش نور، دوری از نمایشگرها، آماده‌سازی لباس و وسایل روز بعد)",
+                "۲۱:۳۰ - ۰۵:۰۰: خواب با کیفیت (هدف: ۷.۵ ساعت). ایجاد محیط تاریک و ساکت برای خواب."
+            ],
+            "afternoon": [ // شیفت عصر: ۱۴:۰۰ تا ۲۴:۰۰ کار
+                "۰۷:۰۰ - ۰۷:۳۰: بیدار شدن، نوشیدن آب، دوش کوتاه",
+                "۰۷:۳۰ - ۰۸:۳۰: صبحانه کامل و مقوی با خانواده",
+                "۰۸:۳۰ - ۱۰:۰۰: فعالیت بدنی (ورزش متوسط مانند دویدن آرام، دوچرخه‌سواری یا تمرینات قدرتی سبک در منزل)، دوش",
+                "۱۰:۰۰ - ۱۲:۰۰: امور شخصی، کمک به فرزندان (تکالیف، برنامه‌ریزی روز)، مطالعه یا سرگرمی",
+                "۱۲:۰۰ - ۱۳:۰۰: ناهار با خانواده",
+                "۱۳:۰۰ - ۱۳:۴۵: آماده شدن برای کار، استراحت کوتاه، میان‌وعده انرژی‌زا (مثلاً ماست و میوه)",
+                "۰۰:۰۰ - ۰۰:۳۰ (روز بعد): بازگشت از کار، آماده شدن برای خواب، نوشیدن آب",
+                "۰۰:۳۰ - ۰۷:۰۰: خواب با کیفیت (هدف: ۶.۵ تا ۷ ساعت). ایجاد محیط تاریک و ساکت."
+            ],
+            "night": [ // شیفت شب: ۲۲:۰۰ تا ۰۸:۰۰ فردا کار
+                "۰۸:۰۰ - ۰۸:۳۰ (روز بعد از شیفت): بازگشت از کار، میان‌وعده پروتئینی کوچک (مثلاً تخم مرغ آب‌پز یا پروتئین بار)",
+                "۰۸:۳۰ - ۰۹:۰۰: آماده شدن برای خواب (لباس راحت، نوشیدن آب، تاریک کردن کامل اتاق خواب، استفاده از ماسک چشم و گوش‌گیر در صورت نیاز)",
+                "۰۹:۰۰ - ۱۶:۰۰: خواب اصلی (هدف: ۷ ساعت). بدون وقفه و در محیط کاملا آرام و تاریک.",
+                "۱۶:۰۰ - ۱۶:۳۰: بیدار شدن، دوش آب ولرم، نوشیدن آب",
+                "۱۶:۳۰ - ۱۸:۰۰: زمان با خانواده (شام زودتر با فرزندان، بازی، گفتگوی خانوادگی)",
+                "۱۸:۰۰ - ۱۹:۰۰: فعالیت بدنی ملایم (پیاده‌روی سریع در پارک یا محله، کشش سبک)",
+                "۱۹:۰۰ - ۲۰:۰۰: شام سبک و سالم با خانواده",
+                "۲۰:۰۰ - ۲۱:۰۰: زمان آزاد با خانواده/همسر، مطالعه، گوش دادن به موسیقی آرام",
+                "۲۱:۰۰ - ۲۱:۳۰: آماده شدن برای خواب (کاهش نور، دوری از نمایشگرها، آماده‌سازی لباس و وسایل روز بعد)",
+                "۲۱:۳۰ - ۰۵:۰۰: خواب با کیفیت (هدف: ۷.۵ ساعت). ایجاد محیط تاریک و ساکت برای خواب."
+            ],
+            "off": [ // روز آف: روز کامل استراحت
+                "۰۸:۰۰ - ۰۸:۳۰: بیدار شدن (سعی کنید ساعت خواب را تنظیم نگه دارید تا ریتم بدن مختل نشود)",
+                "۰۸:۳۰ - ۰۹:۳۰: صبحانه کامل و لذت‌بخش با خانواده",
+                "۰۹:۳۰ - ۱۲:۰۰: فعالیت بدنی (ورزش متوسط تا کمی شدید، مثل کوه‌پیمایی سبک خانوادگی یا باشگاه)، امور شخصی، رسیدگی به خانه",
+                "۱۲:۰۰ - ۱۳:۰۰: ناهار با خانواده",
+                "۱۳:۰۰ - ۱۶:۰۰: زمان استراحت/خواب کوتاه (اختیاری، حداکثر ۳۰ دقیقه) یا فعالیت‌های آرامش‌بخش (مطالعه، فیلم دیدن)",
+                "۱۶:۰۰ - ۱۸:۰۰: زمان با فرزندان (بازی، فعالیت مشترک، کمک به تکالیف فرزند ۶ ساله)",
+                "۱۸:۰۰ - ۱۹:۰۰: فعالیت تفریحی خارج از منزل یا سرگرمی خانوادگی (پارک، سینما، دیدار با اقوام)",
+                "۱۹:۰۰ - ۲۰:۰۰: شام با خانواده",
+                "۲۰:۰۰ - ۲۲:۰۰: زمان با همسر و فرزندان، مرور برنامه‌های هفته، آماده شدن برای خواب",
+                "۲۲:۰۰ - ۰۸:۰۰: خواب با کیفیت و کافی."
+            ]
+        };
+
+        // Official holidays for Jalali year 1404 based on user's provided list
+        const officialHolidays = [
+            { year: 1404, month: 1, day: 1, title: "آغاز نوروز" },
+            { year: 1404, month: 1, day: 2, title: "شهادت امام علی (ع) و عید نوروز" },
+            { year: 1404, month: 1, day: 3, title: "عید نوروز" },
+            { year: 1404, month: 1, day: 4, title: "عید نوروز" },
+            { year: 1404, month: 1, day: 11, title: "عید فطر" },
+            { year: 1404, month: 1, day: 12, title: "تعطیل به مناسبت عید سعید فطر و روز جمهوری اسلامی ایران" },
+            { year: 1404, month: 1, day: 13, title: "روز طبیعت" },
+            { year: 1404, month: 2, day: 4, title: "شهادت امام جعفرصادق (ع)" },
+            { year: 1404, month: 3, day: 14, title: "رحلت حضرت امام خمینی (ره)" },
+            { year: 1404, month: 3, day: 15, title: "قیام ۱۵ خرداد" },
+            { year: 1404, month: 3, day: 16, title: "عید قربان" },
+            { year: 1404, month: 3, day: 24, title: "عید غدیر" },
+            { year: 1404, month: 4, day: 14, title: "تاسوعای حسینی" },
+            { year: 1404, month: 4, day: 15, title: "عاشورای حسینی" },
+            { year: 1404, month: 5, day: 23, title: "اربعین حسینی" },
+            { year: 1404, month: 5, day: 31, title: "رحلت رسول اکرم و شهادت امام حسن مجتبی(ع)" },
+            { year: 1404, month: 6, day: 2, title: "شهادت امام رضا(ع)" },
+            { year: 1404, month: 6, day: 10, title: "شهادت امام حسن عسکری(ع)" },
+            { year: 1404, month: 6, day: 19, title: "میلاد رسول اکرم(ص) و امام جعفر صادق(ع)" },
+            // مهرماه و آبان‌ماه تعطیلات رسمی و مناسبتی ندارد.
+            { year: 1404, month: 9, day: 3, title: "شهادت حضرت زهرا (س)" },
+            { year: 1404, month: 10, day: 13, title: "ولادت امام علی (ع) و روز پدر" },
+            { year: 1404, month: 10, day: 27, title: "مبعث حضرت رسول اکرم (ص)" },
+            { year: 1404, month: 11, day: 15, title: "ولادت حضرت قائم (عج) و جشن نیمه شعبان" },
+            { year: 1404, month: 11, day: 22, title: "پیروزی انقلاب اسلامی ایران و سقوط نظام شاهنشاهی" },
+            { year: 1404, month: 12, day: 20, title: "شهادت حضرت علی(ع)" },
+            { year: 1404, month: 12, day: 29, title: "روز ملی شدن صنعت نفت ایران" }
+        ];
+
+
+        /**
+         * Loads user settings from localStorage or uses defaults.
+         */
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('shiftCalendarSettings');
+            if (savedSettings) {
+                try {
+                    const parsedSettings = JSON.parse(savedSettings);
+                    // Ensure structure integrity for loaded settings
+                    userSettings.shiftCycleStart = parsedSettings.shiftCycleStart || { year: 1404, month: 5, day: 28 };
+                    userSettings.dailyRoutines = parsedSettings.dailyRoutines || defaultDailyRoutines;
+                    userSettings.customShiftTypes = parsedSettings.customShiftTypes || [];
+                    userSettings.customShiftCycle = parsedSettings.customShiftCycle || ['morning', 'afternoon', 'night', 'off'];
+                } catch (e) {
+                    console.error("Error parsing saved settings, loading defaults.", e);
+                    userSettings = {
+                        shiftCycleStart: { year: 1404, month: 5, day: 28 },
+                        dailyRoutines: defaultDailyRoutines,
+                        customShiftTypes: [],
+                        customShiftCycle: ['morning', 'afternoon', 'night', 'off']
+                    };
+                }
+            } else {
+                userSettings = {
+                    shiftCycleStart: { year: 1404, month: 5, day: 28 },
+                    dailyRoutines: defaultDailyRoutines,
+                    customShiftTypes: [],
+                    customShiftCycle: ['morning', 'afternoon', 'night', 'off']
+                };
+            }
+            applySettings();
+        }
+
+        /**
+         * Applies loaded/default settings to global variables.
+         */
+        function applySettings() {
+            // Apply defaults if any part is missing from loaded settings
+            userSettings.shiftCycleStart = userSettings.shiftCycleStart || { year: 1404, month: 5, day: 28 };
+            userSettings.dailyRoutines = userSettings.dailyRoutines || defaultDailyRoutines;
+            userSettings.customShiftTypes = userSettings.customShiftTypes || [];
+            userSettings.customShiftCycle = userSettings.customShiftCycle || ['morning', 'afternoon', 'night', 'off'];
+            
+            // Filter out any invalid shift IDs in the custom cycle
+            userSettings.customShiftCycle = userSettings.customShiftCycle.filter(id => (
+                defaultShiftTypes.some(s => s.id === id) || userSettings.customShiftTypes.some(s => s.id === id)
+            ));
+            // If custom cycle becomes empty or invalid, reset to default
+            if (userSettings.customShiftCycle.length === 0) {
+                userSettings.customShiftCycle = ['morning', 'afternoon', 'night', 'off'];
+            }
+
+
+            // Combine default and custom shift types for use in rendering
+            allShiftTypes = [...defaultShiftTypes, ...userSettings.customShiftTypes];
+            
+            // Set the current dynamic shift cycle length
+            currentShiftCycleLength = userSettings.customShiftCycle.length;
+
+
+            shiftCycleStartJYear = userSettings.shiftCycleStart.year;
+            shiftCycleStartJMonth = userSettings.shiftCycleStart.month;
+            shiftCycleStartJDay = userSettings.shiftCycleStart.day;
+            shiftCycleStartAbsoluteDay = getJalaliAbsoluteDay(shiftCycleStartJYear, shiftCycleStartJMonth, shiftCycleStartJDay);
+
+            // Ensure all current shift types (default + custom) have a routine entry
+            allShiftTypes.forEach(shift => {
+                if (!userSettings.dailyRoutines[shift.id]) {
+                    userSettings.dailyRoutines[shift.id] = []; // Initialize empty routine for new shifts
+                }
+            });
+        }
+
+        /**
+         * Saves current user settings to localStorage.
+         */
+        function saveSettings() {
+            userSettings.shiftCycleStart = {
+                year: parseInt(document.getElementById('shift-start-year').value),
+                month: parseInt(document.getElementById('shift-start-month').value),
+                day: parseInt(document.getElementById('shift-start-day').value)
+            };
+
+            // Save routines for all current shift types
+            allShiftTypes.forEach(shift => {
+                const textarea = document.getElementById(`routine-editor-${shift.id}`);
+                if (textarea) {
+                    // Assuming routine is an array of strings, but if it has reminder objects, convert to text
+                    userSettings.dailyRoutines[shift.id] = textarea.value.split('\n').map(item => item.trim()).filter(item => item !== '');
+                }
+            });
+
+            // Parse and save custom shift cycle from the TEXTAREA (it's kept in sync by visual builder)
+            const customCycleInput = document.getElementById('custom-shift-cycle-input').value.trim();
+            if (customCycleInput) {
+                let parsedCycle = customCycleInput.split(/[\n,]+/).map(item => item.trim()).filter(item => item !== '');
+                // Validate if all entered IDs exist
+                const invalidIds = parsedCycle.filter(id => !allShiftTypes.some(s => s.id === id));
+                if (invalidIds.length > 0) {
+                    showMessageBox('خطا در سیکل کاری', `شناسه‌های شیفت نامعتبر یافت شد: ${invalidIds.join(', ')}\nلطفاً فقط از شناسه‌های تعریف شده استفاده کنید.`);
+                    return; // Stop saving if invalid IDs are found
+                }
+                userSettings.customShiftCycle = parsedCycle;
+            } else {
+                userSettings.customShiftCycle = ['morning', 'afternoon', 'night', 'off']; // Reset to default if empty
+            }
+
+
+            localStorage.setItem('shiftCalendarSettings', JSON.stringify(userSettings));
+            applySettings(); // Re-apply settings to update allShiftTypes and currentShiftCycleLength
+            renderCalendar(); // Re-render calendar to reflect changes
+            closeModal('settings-modal');
+        }
+
+        /**
+         * Loads user events/notes from localStorage.
+         */
+        function loadEvents() {
+            const savedEvents = localStorage.getItem('shiftCalendarEvents');
+            if (savedEvents) {
+                try {
+                    userEvents = JSON.parse(savedEvents);
+                    // Ensure notes are in object format {text, reminderTime, triggered} if they were saved as simple strings
+                    for (const dateKey in userEvents) {
+                        userEvents[dateKey] = userEvents[dateKey].map(note => {
+                            if (typeof note === 'string') {
+                                return { text: note, reminderTime: null, triggered: false };
+                            }
+                            return {
+                                text: note.text,
+                                reminderTime: note.reminderTime || null,
+                                triggered: note.triggered || false // Ensure 'triggered' flag exists
+                            };
+                        });
+                    }
+                } catch (e) {
+                    console.error("Error parsing saved events, initializing empty events.", e);
+                    userEvents = {};
+                }
+            } else {
+                userEvents = {};
+            }
+        }
+
+        /**
+         * Saves current user events/notes to localStorage.
+         */
+        function saveEvents() {
+            localStorage.setItem('shiftCalendarEvents', JSON.stringify(userEvents));
+            renderCalendar(); // Re-render calendar to show/hide note indicators
+        }
+
+        /**
+         * Initializes the calendar by loading settings/events and rendering the current month.
+         */
+        function initCalendar() {
+            loadSettings();
+            loadEvents();
+
+            currentJYear = todayJYear;
+            currentJMonth = todayJMonth;
+            currentJDay = todayJDay;
+
+            renderCalendar();
+            startReminderCheck(); // Start checking for reminders
+        }
+
+        /**
+         * Renders the calendar grid for the current month.
+         */
+        function renderCalendar() {
+            const header = document.getElementById('calendar-header-text');
+            const daysGrid = document.getElementById('calendar-days-grid');
+            daysGrid.innerHTML = '';
+
+            header.textContent = `${jalaliMonthNames[currentJMonth - 1]} ${convertToPersianDigits(currentJYear)}`;
+
+            const [gYear, gMonth, gDay] = jalali_to_gregorian(currentJYear, currentJMonth, 1);
+            const firstDayOfMonth = new Date(gYear, gMonth - 1, gDay).getDay();
+
+            const numDaysInMonth = (currentJMonth <= 6) ? 31 : (currentJMonth <= 11) ? 30 : (isJalaliLeapYear(currentJYear) ? 30 : 29);
+
+            let startingDayOffset = (firstDayOfMonth + 1) % 7;
+
+            for (let i = 0; i < startingDayOffset; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'day-cell';
+                daysGrid.appendChild(emptyCell);
+            }
+
+            for (let day = 1; day <= numDaysInMonth; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day-cell hoverable';
+
+                // Calculate shift info for every day using the customShiftCycle
+                const currentDayAbsolute = getJalaliAbsoluteDay(currentJYear, currentJMonth, day);
+                const dayOffsetFromCycleStart = currentDayAbsolute - shiftCycleStartAbsoluteDay;
+                
+                // Use currentShiftCycleLength which is dynamic
+                const cycleIndex = (dayOffsetFromCycleStart % currentShiftCycleLength + currentShiftCycleLength) % currentShiftCycleLength;
+                
+                // Get the shift ID from the custom cycle array
+                const shiftIdForDay = userSettings.customShiftCycle[cycleIndex];
+                
+                // Find the full shift info object from allShiftTypes
+                const shiftInfo = allShiftTypes.find(s => s.id === shiftIdForDay);
+
+                // Apply shift color from shiftInfo if found, else default
+                if (shiftInfo) {
+                    dayCell.style.backgroundColor = shiftInfo.color;
+                } else {
+                    // Fallback for invalid shift IDs in custom cycle (should be prevented by validation)
+                    dayCell.style.backgroundColor = '#cccccc'; // Grey if shift info not found
+                }
+
+                // Add day number
+                const dayNumberDiv = document.createElement('div');
+                dayNumberDiv.className = 'day-number';
+                dayNumberDiv.textContent = convertToPersianDigits(day);
+                dayCell.appendChild(dayNumberDiv);
+
+                // Add shift letter
+                const shiftLetterDiv = document.createElement('div');
+                shiftLetterDiv.className = 'shift-letter';
+                shiftLetterDiv.textContent = shiftInfo ? shiftInfo.letter : '?'; // Use '?' if shift info not found
+                dayCell.appendChild(shiftLetterDiv);
+
+                // Check for official holiday
+                const holiday = officialHolidays.find(h =>
+                    h.year === currentJYear &&
+                    h.month === currentJMonth &&
+                    h.day === day
+                );
+                const isHoliday = !!holiday;
+
+                if (isHoliday) {
+                    dayCell.classList.add('holiday'); // Add holiday class for border
+                }
+
+
+                // Add note indicator if notes exist for this day
+                const dateKey = `${currentJYear}-${currentJMonth}-${day}`;
+                if (userEvents[dateKey] && userEvents[dateKey].length > 0) {
+                    dayCell.classList.add('has-notes');
+                }
+
+                if (day === todayJDay && currentJMonth === todayJMonth && currentJYear === todayJYear) {
+                    dayCell.classList.add('today');
+                }
+
+                dayCell.addEventListener('click', () => openRoutineModal(
+                    currentJYear,
+                    currentJMonth,
+                    day,
+                    shiftInfo ? shiftInfo.id : null, // Pass shiftInfo.id if found
+                    shiftInfo ? shiftInfo.name : 'نامشخص', // Pass shiftInfo.name if found
+                    isHoliday ? holiday.title : null // Pass holiday title if it's a holiday
+                ));
+
+                daysGrid.appendChild(dayCell);
+            }
+        }
+
+        // --- Navigation Functions ---
+        function changeMonth(delta) {
+            currentJMonth += delta;
+            if (currentJMonth > 12) {
+                currentJMonth = 1;
+                currentJYear++;
+            } else if (currentJMonth < 1) {
+                currentJMonth = 12;
+                currentJYear--;
+            }
+            renderCalendar();
+        }
+
+        function changeYear(delta) {
+            currentJYear += delta;
+            renderCalendar();
+        }
+
+        function goToToday() {
+            currentJYear = todayJYear;
+            currentJMonth = todayJMonth;
+            renderCalendar();
+        }
+
+        // --- Modal Functions ---
+
+        /**
+         * Closes a given modal.
+         * @param {string} modalId The ID of the modal to close.
+         */
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // --- Custom Message Box Functions ---
+        let messageBoxCallback = null;
+        function showMessageBox(title, message, callback = null) {
+            const msgBox = document.getElementById('message-box');
+            document.getElementById('message-box-title').textContent = title;
+            document.getElementById('message-box-content').textContent = message;
+            messageBoxCallback = callback; // Store the callback
+            msgBox.classList.remove('hidden');
+        }
+
+        function closeMessageBox() {
+            document.getElementById('message-box').classList.add('hidden');
+            if (messageBoxCallback) {
+                messageBoxCallback(); // Execute the callback if it exists
+                messageBoxCallback = null; // Clear the callback
+            }
+        }
+
+        // --- Routine Modal Specific Functions ---
+        function openRoutineModal(year, month, day, shiftId, shiftName, holidayTitle = null) {
+            const modal = document.getElementById('routine-modal');
+            const modalTitle = document.getElementById('routine-modal-title');
+            const holidayInfoElement = document.getElementById('holiday-info');
+            const routineList = document.getElementById('routine-list');
+            const editButton = document.getElementById('edit-shift-routine-button');
+            const openNotesButton = document.getElementById('open-notes-modal-button');
+
+            // Set modal title
+            modalTitle.textContent = `برنامه روز ${convertToPersianDigits(day)} ${jalaliMonthNames[month - 1]} ${convertToPersianDigits(year)}`;
+
+            // Display holiday info if applicable
+            if (holidayTitle) {
+                holidayInfoElement.textContent = `مناسبت: ${holidayTitle}`;
+                holidayInfoElement.classList.remove('hidden');
+                modalTitle.textContent += ` - شیفت ${shiftName} (تعطیل رسمی)`; // Add both shift and holiday info
+            } else {
+                holidayInfoElement.classList.add('hidden'); // Ensure it's hidden if not a holiday
+                modalTitle.textContent += ` - شیفت ${shiftName}`; // Add shift name to title
+            }
+
+
+            routineList.innerHTML = ''; // Clear previous items
+
+            const routine = userSettings.dailyRoutines[shiftId]; // Get routine from userSettings
+            if (routine && routine.length > 0) {
+                routine.forEach(item => {
+                    const listItem = document.createElement('li');
+                    // Routines are just strings, notes are objects. Handle accordingly.
+                    listItem.textContent = typeof item === 'object' ? item.text : item;
+                    routineList.appendChild(listItem);
+                });
+            } else { // This message applies if no routine is defined for a shift type, regardless of holiday
+                const listItem = document.createElement('li');
+                listItem.textContent = "برنامه‌ای برای این شیفت تعریف نشده است. می‌توانید از بخش تنظیمات آن را ویرایش کنید.";
+                routineList.appendChild(listItem);
+            }
+
+            // Always show edit routine button for shifts, as they are always relevant
+            editButton.classList.remove('hidden');
+            editButton.setAttribute('data-shift-id-to-edit', shiftId);
+            
+            openNotesButton.setAttribute('data-jalali-date', `${year}-${month}-${day}`); // Pass date to notes modal button
+
+            modal.classList.remove('hidden'); // Show modal
+        }
+
+        // --- Summary Modal Specific Functions ---
+        function openSummaryModal() {
+            const summaryModal = document.getElementById('summary-modal');
+            
+            document.getElementById('summary-month-name').textContent = jalaliMonthNames[currentJMonth - 1];
+            document.getElementById('summary-year-number').textContent = convertToPersianDigits(currentJYear);
+
+            // Get monthly shift summary
+            const monthlyShiftSummary = getShiftCountsForMonth(currentJYear, currentJMonth);
+            const monthlyShiftSummaryDiv = document.getElementById('monthly-shift-summary');
+            monthlyShiftSummaryDiv.innerHTML = '';
+            for (const shiftId in monthlyShiftSummary) {
+                const shift = allShiftTypes.find(s => s.id === shiftId);
+                if (shift) {
+                    const p = document.createElement('p');
+                    p.innerHTML = `<strong>${shift.name}:</strong> ${convertToPersianDigits(monthlyShiftSummary[shiftId])} روز`;
+                    monthlyShiftSummaryDiv.appendChild(p);
+                }
+            }
+
+            // Get monthly note count
+            const monthlyNoteCount = getNoteCountsForMonth(currentJYear, currentJMonth);
+            document.getElementById('monthly-note-count').textContent = convertToPersianDigits(monthlyNoteCount);
+
+
+            // Get yearly shift summary
+            const yearlyShiftSummary = getShiftCountsForYear(currentJYear);
+            const yearlyShiftSummaryDiv = document.getElementById('yearly-shift-summary');
+            yearlyShiftSummaryDiv.innerHTML = '';
+            for (const shiftId in yearlyShiftSummary) {
+                const shift = allShiftTypes.find(s => s.id === shiftId);
+                if (shift) {
+                    const p = document.createElement('p');
+                    p.innerHTML = `<strong>${shift.name}:</strong> ${convertToPersianDigits(yearlyShiftSummary[shiftId])} روز`;
+                    yearlyShiftSummaryDiv.appendChild(p);
+                }
+            }
+
+            // Get yearly note count
+            const yearlyNoteCount = getNoteCountsForYear(currentJYear);
+            document.getElementById('yearly-note-count').textContent = convertToPersianDigits(yearlyNoteCount);
+
+            summaryModal.classList.remove('hidden');
+        }
+
+        /**
+         * Calculates shift counts for a given month.
+         * @param {number} year Jalali year.
+         * @param {number} month Jalali month.
+         * @returns {Object} An object with shift IDs as keys and their counts as values.
+         */
+        function getShiftCountsForMonth(year, month) {
+            const counts = {};
+            allShiftTypes.forEach(s => counts[s.id] = 0); // Initialize counts for all known shifts
+
+            const numDaysInMonth = (month <= 6) ? 31 : (month <= 11) ? 30 : (isJalaliLeapYear(year) ? 30 : 29);
+
+            for (let day = 1; day <= numDaysInMonth; day++) {
+                const currentDayAbsolute = getJalaliAbsoluteDay(year, month, day);
+                const dayOffsetFromCycleStart = currentDayAbsolute - shiftCycleStartAbsoluteDay;
+                const cycleIndex = (dayOffsetFromCycleStart % currentShiftCycleLength + currentShiftCycleLength) % currentShiftCycleLength;
+                const shiftIdForDay = userSettings.customShiftCycle[cycleIndex];
+                
+                if (counts.hasOwnProperty(shiftIdForDay)) {
+                    counts[shiftIdForDay]++;
+                }
+            }
+            return counts;
+        }
+
+        /**
+         * Calculates shift counts for a given year.
+         * @param {number} year Jalali year.
+         * @returns {Object} An object with shift IDs as keys and their counts as values.
+         */
+        function getShiftCountsForYear(year) {
+            const counts = {};
+            allShiftTypes.forEach(s => counts[s.id] = 0); // Initialize counts for all known shifts
+
+            for (let month = 1; month <= 12; month++) {
+                const numDaysInMonth = (month <= 6) ? 31 : (month <= 11) ? 30 : (isJalaliLeapYear(year) ? 30 : 29);
+                for (let day = 1; day <= numDaysInMonth; day++) {
+                    const currentDayAbsolute = getJalaliAbsoluteDay(year, month, day);
+                    const dayOffsetFromCycleStart = currentDayAbsolute - shiftCycleStartAbsoluteDay;
+                    const cycleIndex = (dayOffsetFromCycleStart % currentShiftCycleLength + currentShiftCycleLength) % currentShiftCycleLength;
+                    const shiftIdForDay = userSettings.customShiftCycle[cycleIndex];
+
+                    if (counts.hasOwnProperty(shiftIdForDay)) {
+                        counts[shiftIdForDay]++;
+                    }
+                }
+            }
+            return counts;
+        }
+
+        /**
+         * Counts notes for a given month.
+         * @param {number} year Jalali year.
+         * @param {number} month Jalali month.
+         * @returns {number} Total number of notes in the month.
+         */
+        function getNoteCountsForMonth(year, month) {
+            let count = 0;
+            const numDaysInMonth = (month <= 6) ? 31 : (month <= 11) ? 30 : (isJalaliLeapYear(year) ? 30 : 29);
+            for (let day = 1; day <= numDaysInMonth; day++) {
+                const dateKey = `${year}-${month}-${day}`;
+                if (userEvents[dateKey] && userEvents[dateKey].length > 0) {
+                    count += userEvents[dateKey].length;
+                }
+            }
+            return count;
+        }
+
+        /**
+         * Counts notes for a given year.
+         * @param {number} year Jalali year.
+         * @returns {number} Total number of notes in the year.
+         */
+        function getNoteCountsForYear(year) {
+            let count = 0;
+            for (let month = 1; month <= 12; month++) {
+                const numDaysInMonth = (month <= 6) ? 31 : (month <= 11) ? 30 : (isJalaliLeapYear(year) ? 30 : 29);
+                for (let day = 1; day <= numDaysInMonth; day++) {
+                    const dateKey = `${year}-${month}-${day}`;
+                    if (userEvents[dateKey] && userEvents[dateKey].length > 0) {
+                        count += userEvents[dateKey].length;
+                    }
+                }
+            }
+            return count;
+        }
+
+
+        // --- Settings Modal Specific Functions ---
+        function openSettingsModal() {
+            const settingsModal = document.getElementById('settings-modal');
+            document.getElementById('shift-start-year').value = userSettings.shiftCycleStart.year;
+            document.getElementById('shift-start-month').value = userSettings.shiftCycleStart.month;
+            document.getElementById('shift-start-day').value = userSettings.shiftCycleStart.day;
+
+            const routineEditorsContainer = document.getElementById('routine-editors-container');
+            routineEditorsContainer.innerHTML = '';
+
+            // Render routine editors for ALL shift types (default and custom)
+            allShiftTypes.forEach(shift => {
+                const editorDiv = document.createElement('div');
+                editorDiv.className = 'mb-4 p-3 border border-gray-200 rounded-lg bg-gray-50';
+                // Routines are stored as arrays of strings.
+                const routineText = (userSettings.dailyRoutines[shift.id] || []).map(item => typeof item === 'object' ? item.text : item).join('\n');
+                editorDiv.innerHTML = `
+                    <label for="routine-editor-${shift.id}" class="block text-sm font-medium text-gray-700 mb-1">
+                        برنامه شیفت ${shift.name}:
+                    </label>
+                    <textarea id="routine-editor-${shift.id}" rows="8" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="هر آیتم را در یک خط جدید بنویسید">${routineText}</textarea>
+                `;
+                routineEditorsContainer.appendChild(editorDiv);
+            });
+
+            renderCustomShiftTypesList(); // Populate and render the custom shift types list
+            populateAvailableShiftTypes(); // Populate available shifts for visual builder
+            syncAllCycleViews(); // Call the orchestrator to populate both text and visual views
+
+            settingsModal.classList.remove('hidden');
+        }
+
+        /**
+         * Renders the list of custom shift types in the settings modal.
+         */
+        function renderCustomShiftTypesList() {
+            const customShiftTypesList = document.getElementById('custom-shift-types-list');
+            customShiftTypesList.innerHTML = '';
+
+            if (userSettings.customShiftTypes.length === 0) {
+                const noCustomShifts = document.createElement('p');
+                noCustomShifts.className = 'text-gray-500 text-sm text-center py-2';
+                noCustomShifts.textContent = "هنوز شیفت سفارشی تعریف نکرده‌اید.";
+                customShiftTypesList.appendChild(noCustomShifts);
+            } else {
+                userSettings.customShiftTypes.forEach((shift, index) => {
+                    const shiftItem = document.createElement('div');
+                    shiftItem.className = 'flex items-center space-x-2 rtl:space-x-reverse py-2 border-b border-gray-100 last:border-b-0';
+                    shiftItem.innerHTML = `
+                        <input type="text" value="${shift.name}" class="p-1 border border-gray-200 rounded-md text-sm w-24" data-index="${index}" data-field="name" aria-label="نام شیفت">
+                        <input type="text" value="${shift.letter}" class="p-1 border border-gray-200 rounded-md text-sm w-12 text-center" maxlength="1" data-index="${index}" data-field="letter" aria-label="حرف شیفت">
+                        <div class="color-input-wrapper flex-shrink-0">
+                            <input type="color" value="${shift.color}" data-index="${index}" data-field="color" aria-label="رنگ شیفت">
+                            <span class="color-display" style="background-color: ${shift.color};"></span>
+                        </div>
+                        <span class="text-xs text-gray-500 flex-grow text-left pr-2">ID: ${shift.id}</span>
+                        <button class="delete-custom-shift-button bg-red-400 hover:bg-red-500 text-white text-xs px-2 py-1 rounded-md" data-index="${index}">حذف</button>
+                    `;
+                    customShiftTypesList.appendChild(shiftItem);
+                });
+
+                // Add event listeners for editing custom shifts
+                customShiftTypesList.querySelectorAll('input[type="text"], input[type="color"]').forEach(input => {
+                    input.addEventListener('change', (event) => {
+                        const index = parseInt(event.target.dataset.index);
+                        const field = event.target.dataset.field;
+                        const value = event.target.value;
+                        userSettings.customShiftTypes[index][field] = value;
+                        applySettings(); // Re-apply to update allShiftTypes
+                        renderCalendar(); // Re-render calendar to reflect color/letter changes
+                        if (field === 'color') {
+                            event.target.nextElementSibling.style.backgroundColor = value; // Update color display span
+                        }
+                        // Update visual cycle builder and text input after shift type changes
+                        populateAvailableShiftTypes();
+                        syncAllCycleViews(); // Call orchestrator
+                    });
+                });
+
+                // Add event listeners for deleting custom shifts
+                customShiftTypesList.querySelectorAll('.delete-custom-shift-button').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        const index = parseInt(event.target.dataset.index);
+                        showMessageBox('تایید حذف', 'آیا مطمئنید می‌خواهید این شیفت سفارشی را حذف کنید؟ این عمل غیرقابل بازگشت است و برنامه روزانه مربوط به این شیفت نیز حذف خواهد شد.', () => {
+                            const shiftIdToDelete = userSettings.customShiftTypes[index].id;
+                            if (userSettings.dailyRoutines[shiftIdToDelete]) {
+                                delete userSettings.dailyRoutines[shiftIdToDelete];
+                            }
+
+                            userSettings.customShiftTypes.splice(index, 1);
+                            saveSettings(); // Save and re-render
+                            renderCustomShiftTypesList(); // Re-render the list itself
+                            populateAvailableShiftTypes(); // Update available shifts
+                            syncAllCycleViews(); // Call orchestrator
+                        });
+                    });
+                });
+            }
+        }
+
+        /**
+         * Adds a new custom shift type.
+         */
+        function addCustomShiftType() {
+            const newShiftId = document.getElementById('new-shift-id').value.trim();
+            const newShiftName = document.getElementById('new-shift-name').value.trim();
+            const newShiftLetter = document.getElementById('new-shift-letter').value.trim();
+            const newShiftColor = document.getElementById('new-shift-color').value;
+
+            if (!newShiftId || !newShiftName || !newShiftLetter) {
+                showMessageBox('خطا', 'لطفاً همه فیلدهای شناسه (ID)، نام و حرف شیفت را پر کنید.');
+                return;
+            }
+
+            // Validate ID format (no spaces, English characters recommended for ID)
+            if (!/^[a-zA-Z0-9_-]+$/.test(newShiftId)) {
+                showMessageBox('خطا', 'شناسه (ID) باید فقط شامل حروف انگلیسی، اعداد، خط تیره (-) یا زیرخط (_) باشد و بدون فاصله باشد.');
+                return;
+            }
+
+            // Check if ID already exists
+            const idExists = allShiftTypes.some(shift => shift.id === newShiftId);
+            if (idExists) {
+                showMessageBox('خطا', 'شناسه شیفت تکراری است. لطفاً یک شناسه منحصر به فرد وارد کنید.');
+                return;
+            }
+            
+            // Check if letter already exists (for better UI, though not strictly required)
+            const letterExists = allShiftTypes.some(shift => shift.letter === newShiftLetter);
+            if (letterExists) {
+                showMessageBox('خطا', 'حرف شیفت تکراری است. لطفاً یک حرف منحصر به فرد وارد کنید.');
+                return;
+            }
+
+            const newShift = {
+                id: newShiftId,
+                name: newShiftName,
+                letter: newShiftLetter,
+                color: newShiftColor
+            };
+
+            userSettings.customShiftTypes.push(newShift);
+            saveSettings(); // This will also re-apply settings and re-render the calendar
+            renderCustomShiftTypesList(); // Refresh the list of custom shifts
+            populateAvailableShiftTypes(); // Update available shifts
+            syncAllCycleViews(); // Call orchestrator
+            
+            // Clear inputs
+            document.getElementById('new-shift-id').value = '';
+            document.getElementById('new-shift-name').value = '';
+            document.getElementById('new-shift-letter').value = '';
+            document.getElementById('new-shift-color').value = '#60a5fa'; // Reset color picker
+            document.querySelector('#new-shift-color + .color-display').style.backgroundColor = '#60a5fa'; // Reset color display
+        }
+
+        // --- Visual Shift Cycle Builder Functions ---
+        let draggedShiftId = null;
+        let dragSrcEl = null; // The element being dragged from the current cycle
+
+        function populateAvailableShiftTypes() {
+            const container = document.getElementById('available-shift-types-container');
+            container.innerHTML = '';
+            allShiftTypes.forEach(shift => {
+                const shiftDiv = document.createElement('div');
+                shiftDiv.className = 'draggable-shift';
+                shiftDiv.style.backgroundColor = shift.color;
+                shiftDiv.textContent = shift.name;
+                shiftDiv.draggable = true;
+                shiftDiv.dataset.shiftId = shift.id;
+                shiftDiv.addEventListener('dragstart', handleDragStart);
+                container.appendChild(shiftDiv);
+            });
+        }
+
+        function populateCustomShiftCycleVisualAndPreview() { // Renamed from populateCustomShiftCycleVisual
+            const container = document.getElementById('current-shift-cycle-visual-container');
+            container.innerHTML = ''; // Clear existing visual elements
+
+            userSettings.customShiftCycle.forEach((shiftId, index) => {
+                const shiftInfo = allShiftTypes.find(s => s.id === shiftId);
+                if (shiftInfo) {
+                    const shiftDiv = document.createElement('div');
+                    shiftDiv.className = 'current-cycle-item';
+                    shiftDiv.style.backgroundColor = shiftInfo.color;
+                    shiftDiv.textContent = shiftInfo.name;
+                    shiftDiv.draggable = true;
+                    shiftDiv.dataset.shiftId = shiftInfo.id;
+                    shiftDiv.dataset.index = index; // Store its current index
+                    shiftDiv.addEventListener('dragstart', handleDragStart);
+                    shiftDiv.addEventListener('dragover', handleDragOverCycleItem);
+                    shiftDiv.addEventListener('dragleave', handleDragLeaveCycleItem);
+                    shiftDiv.addEventListener('drop', handleDropCycleItem);
+                    shiftDiv.addEventListener('dragend', handleDragEnd); // Handle visual cleanup after drag
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.className = 'delete-button';
+                    deleteButton.innerHTML = '&times;'; // HTML entity for multiplication sign
+                    deleteButton.onclick = () => {
+                        userSettings.customShiftCycle.splice(index, 1);
+                        syncAllCycleViews(); // Use the orchestrator
+                    };
+                    shiftDiv.appendChild(deleteButton);
+
+                    container.appendChild(shiftDiv);
+                }
+            });
+
+            // Add drop zone listeners to the container itself
+            container.addEventListener('dragover', handleDragOverCycleContainer);
+            container.addEventListener('dragleave', handleDragLeaveCycleContainer);
+            container.addEventListener('drop', handleDropCycleContainer);
+
+            // Update visual preview text
+            const currentCycleVisualPreview = document.getElementById('current-cycle-visual-preview');
+            let visualPreviewText = '';
+            if (userSettings.customShiftCycle.length > 0) {
+                visualPreviewText = 'سیکل فعلی: ';
+                const previewShifts = userSettings.customShiftCycle.map(shiftId => {
+                    const shift = allShiftTypes.find(s => s.id === shiftId);
+                    return shift ? shift.name : `[${shiftId} نامعتبر]`;
+                });
+                visualPreviewText += previewShifts.join(' → ');
+                visualPreviewText += ` (طول سیکل: ${convertToPersianDigits(userSettings.customShiftCycle.length)} روز)`;
+            } else {
+                visualPreviewText = 'سیکل کاری تعریف نشده است. (پیش‌فرض: صبح، عصر، شب، آف)';
+            }
+            currentCycleVisualPreview.textContent = visualPreviewText;
+        }
+
+        function handleDragStart(e) {
+            draggedShiftId = e.target.dataset.shiftId;
+            dragSrcEl = e.target; // Store reference to the element being dragged
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedShiftId);
+            setTimeout(() => {
+                e.target.classList.add('dragging'); // Add dragging class after a short delay
+            }, 0);
+        }
+
+        function handleDragOverCycleContainer(e) {
+            e.preventDefault(); // Necessary to allow dropping
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over'); // Visual feedback for drop zone
+        }
+
+        function handleDragLeaveCycleContainer(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDropCycleContainer(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+
+            if (draggedShiftId) {
+                // If dragging from available shifts, just append
+                if (!e.target.closest('.current-cycle-item')) { // Only append if dropped directly on container, not an item
+                    userSettings.customShiftCycle.push(draggedShiftId);
+                    syncAllCycleViews(); // Use the orchestrator
+                }
+            }
+            draggedShiftId = null;
+        }
+
+        let dragTargetIndex = -1; // To store potential insert index
+
+        function handleDragOverCycleItem(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const targetEl = e.target.closest('.current-cycle-item');
+            if (targetEl && dragSrcEl !== targetEl) {
+                const rect = targetEl.getBoundingClientRect();
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                // Determine if dropping before or after the target item
+                const midX = rect.left + rect.width / 2;
+                // const midY = rect.top + rect.height / 2; // Not used for horizontal layout, assuming flex-wrap behavior
+
+                // Check if the current drop zone is predominantly horizontal
+                const isHorizontalLayout = targetEl.parentElement.scrollWidth > targetEl.parentElement.scrollHeight;
+
+                targetEl.classList.remove('drag-over-insert-before', 'drag-over-insert-after');
+                if (isHorizontalLayout) {
+                    if (mouseX < midX) {
+                        targetEl.classList.add('drag-over-insert-before');
+                    } else {
+                        targetEl.classList.add('drag-over-insert-after');
+                    }
+                } else { // Assume vertical if not predominantly horizontal, or default to checking Y axis
+                    if (mouseY < rect.top + rect.height / 2) {
+                        targetEl.classList.add('drag-over-insert-before');
+                    } else {
+                        targetEl.classList.add('drag-over-insert-after');
+                    }
+                }
+            }
+        }
+
+        function handleDragLeaveCycleItem(e) {
+            e.target.closest('.current-cycle-item')?.classList.remove('drag-over-insert-before', 'drag-over-insert-after');
+            dragTargetIndex = -1;
+        }
+
+        function handleDropCycleItem(e) {
+            e.preventDefault();
+            e.stopPropagation(); // Stop propagation to prevent parent container's drop handler from firing
+            e.target.closest('.current-cycle-item')?.classList.remove('drag-over-insert-before', 'drag-over-insert-after');
+
+            if (draggedShiftId && dragSrcEl) { // Dragging within the cycle
+                const sourceIndex = parseInt(dragSrcEl.dataset.index);
+                const targetEl = e.target.closest('.current-cycle-item');
+                let dropIndex = parseInt(targetEl.dataset.index);
+
+                // Adjust dropIndex if inserting after based on mouse position
+                const rect = targetEl.getBoundingClientRect();
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                const isHorizontalLayout = targetEl.parentElement.scrollWidth > targetEl.parentElement.scrollHeight;
+
+                if (isHorizontalLayout) {
+                    if (mouseX > rect.left + rect.width / 2) {
+                        dropIndex++;
+                    }
+                } else {
+                    if (mouseY > rect.top + rect.height / 2) {
+                        dropIndex++;
+                    }
+                }
+
+                // If dropping on itself, or if source and target are effectively the same position after adjustment, do nothing
+                if (sourceIndex === dropIndex || (sourceIndex + 1 === dropIndex && sourceIndex === parseInt(targetEl.dataset.index))) {
+                     syncAllCycleViews(); // Just re-render to remove dragging class if needed
+                     return;
+                }
+
+                const cycle = userSettings.customShiftCycle;
+                const [removed] = cycle.splice(sourceIndex, 1); // Remove from source
+                cycle.splice(dropIndex > sourceIndex ? dropIndex - 1 : dropIndex, 0, removed); // Insert at target
+
+                syncAllCycleViews(); // Use the orchestrator
+            } else if (draggedShiftId) { // Dropped from available shifts onto an item
+                const targetEl = e.target.closest('.current-cycle-item');
+                let insertIndex = parseInt(targetEl.dataset.index);
+                // Adjust insertIndex if inserting after based on mouse position
+                const rect = targetEl.getBoundingClientRect();
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                const isHorizontalLayout = targetEl.parentElement.scrollWidth > targetEl.parentElement.scrollHeight;
+
+                if (isHorizontalLayout) {
+                    if (mouseX > rect.left + rect.width / 2) {
+                        insertIndex++;
+                    }
+                } else {
+                    if (mouseY > rect.top + rect.height / 2) {
+                        insertIndex++;
+                    }
+                }
+                userSettings.customShiftCycle.splice(insertIndex, 0, draggedShiftId);
+                syncAllCycleViews(); // Use the orchestrator
+            }
+            draggedShiftId = null;
+            dragSrcEl = null;
+            dragTargetIndex = -1;
+        }
+
+        function handleDragEnd(e) {
+            e.target.classList.remove('dragging');
+            // Ensure all drop zone highlights are removed
+            document.querySelectorAll('.drop-zone, .current-cycle-item').forEach(el => {
+                el.classList.remove('drag-over', 'drag-over-insert-before', 'drag-over-insert-after');
+            });
+            draggedShiftId = null;
+            dragSrcEl = null;
+            dragTargetIndex = -1;
+        }
+
+
+        // Function to update both the textarea and the visual builder from userSettings.customShiftCycle
+        function syncAllCycleViews() {
+            populateCustomShiftCycleTextareaAndPreview();
+            populateCustomShiftCycleVisualAndPreview();
+        }
+
+
+        /**
+         * Populates the custom shift cycle input field and displays a preview.
+         * (Now specifically for the textarea and its text preview)
+         */
+        function populateCustomShiftCycleTextareaAndPreview() { // Renamed from populateCustomShiftCycleInput
+            const customCycleInput = document.getElementById('custom-shift-cycle-input');
+            const currentCycleTextPreview = document.getElementById('current-cycle-text-preview');
+
+            customCycleInput.value = userSettings.customShiftCycle.join('\n'); // Display one ID per line
+
+            // Create a readable preview of the cycle for text area
+            let textPreviewText = '';
+            if (userSettings.customShiftCycle.length > 0) {
+                textPreviewText = 'سیکل فعلی (متنی): ';
+                const previewShifts = userSettings.customShiftCycle.map(shiftId => {
+                    const shift = allShiftTypes.find(s => s.id === shiftId);
+                    return shift ? shift.name : `[${shiftId} نامعتبر]`;
+                });
+                textPreviewText += previewShifts.join(' ← ');
+                textPreviewText += ` (طول سیکل: ${convertToPersianDigits(userSettings.customShiftCycle.length)} روز)`;
+            } else {
+                textPreviewText = 'سیکل کاری تعریف نشده است. (پیش‌فرض: صبح، عصر، شب، آف)';
+            }
+            currentCycleTextPreview.textContent = textPreviewText;
+        }
+
+        // --- Notes Modal Specific Functions ---
+        let currentNotesDateKey = ''; // To store the date key of the currently viewed notes
+
+        function openNotesModal(dateKey) {
+            currentNotesDateKey = dateKey;
+            const notesModal = document.getElementById('notes-modal');
+            const notesModalTitle = document.getElementById('notes-modal-title');
+            const notesList = document.getElementById('notes-list');
+            const newNoteTextarea = document.getElementById('new-note-textarea');
+            const reminderTimeInput = document.getElementById('reminder-time');
+
+            // Set title with Persian date
+            const [year, month, day] = dateKey.split('-').map(Number);
+            notesModalTitle.textContent = `یادداشت‌های روز ${convertToPersianDigits(day)} ${jalaliMonthNames[month - 1]} ${convertToPersianDigits(year)}`;
+
+            notesList.innerHTML = ''; // Clear previous notes
+            newNoteTextarea.value = ''; // Clear textarea
+            reminderTimeInput.value = ''; // Clear reminder time input
+
+            const notes = userEvents[dateKey] || [];
+            if (notes.length > 0) {
+                notes.forEach((note, index) => {
+                    const noteItem = document.createElement('div');
+                    noteItem.className = 'note-item';
+                    let reminderDisplay = '';
+                    if (note.reminderTime) {
+                        reminderDisplay = `<span class="text-xs text-gray-500 mr-2">[یادآور: ${convertToPersianDigits(note.reminderTime)}]</span>`;
+                    }
+                    noteItem.innerHTML = `
+                        <span class="note-text">${note.text} ${reminderDisplay}</span>
+                        <button class="delete-note-button bg-red-400 hover:bg-red-500 text-white text-xs px-2 py-1 rounded-md" data-index="${index}">حذف</button>
+                    `;
+                    notesList.appendChild(noteItem);
+                });
+            } else {
+                const noNotesMessage = document.createElement('p');
+                noNotesMessage.className = 'text-gray-500 text-center py-4';
+                noNotesMessage.textContent = "هیچ یادداشتی برای این روز وجود ندارد.";
+                notesList.appendChild(noNotesMessage);
+            }
+
+            notesModal.classList.remove('hidden');
+        }
+
+        function addNote() {
+            const newNoteTextarea = document.getElementById('new-note-textarea');
+            const reminderTimeInput = document.getElementById('reminder-time');
+            const noteText = newNoteTextarea.value.trim();
+            const reminderTime = reminderTimeInput.value.trim();
+
+            if (noteText && currentNotesDateKey) {
+                if (!userEvents[currentNotesDateKey]) {
+                    userEvents[currentNotesDateKey] = [];
+                }
+                const newNote = {
+                    text: noteText,
+                    reminderTime: reminderTime || null, // Store time if provided
+                    reminderDate: currentNotesDateKey, // Store the date for the reminder
+                    triggered: false // Mark as not triggered initially
+                };
+                userEvents[currentNotesDateKey].push(newNote);
+                saveEvents();
+                newNoteTextarea.value = ''; // Clear textarea
+                reminderTimeInput.value = ''; // Clear reminder time input
+                openNotesModal(currentNotesDateKey); // Re-render notes in modal
+            } else if (!noteText) {
+                showMessageBox('خطا', 'لطفاً متن یادداشت را وارد کنید.');
+            }
+        }
+
+        function deleteNote(index) {
+            if (currentNotesDateKey && userEvents[currentNotesDateKey]) {
+                userEvents[currentNotesDateKey].splice(index, 1);
+                // If no notes left for the day, delete the key to avoid empty arrays
+                if (userEvents[currentNotesDateKey].length === 0) {
+                    delete userEvents[currentNotesDateKey];
+                }
+                saveEvents();
+                openNotesModal(currentNotesDateKey); // Re-render notes in modal
+            }
+        }
+
+        // --- Reminder Logic ---
+        let reminderCheckInterval; // To hold the interval ID
+
+        function startReminderCheck() {
+            // Clear any existing interval to prevent multiple checks
+            if (reminderCheckInterval) {
+                clearInterval(reminderCheckInterval);
+            }
+
+            reminderCheckInterval = setInterval(() => {
+                const now = new Date();
+                const currentHour = String(now.getHours()).padStart(2, '0');
+                const currentMinute = String(now.getMinutes()).padStart(2, '0');
+                const currentTime = `${currentHour}:${currentMinute}`;
+
+                const [todayJYearLocal, todayJMonthLocal, todayJDayLocal] = gregorian_to_jalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+                const todayDateKey = `${todayJYearLocal}-${todayJMonthLocal}-${todayJDayLocal}`;
+
+                // Check notes for today
+                const notesForToday = userEvents[todayDateKey];
+                if (notesForToday && notesForToday.length > 0) {
+                    notesForToday.forEach(note => { // No need for index if not deleting from this loop
+                        // Check if reminderTime exists and matches current time
+                        if (note.reminderTime === currentTime && !note.triggered) {
+                            showMessageBox('یادآور!', `یادآور برای ${convertToPersianDigits(note.reminderTime)}: ${note.text}`);
+                            note.triggered = true; // Mark as triggered to prevent repeated notifications for the same minute
+                            // Optionally, save events here if you want triggered state to persist, but for this simple version, it's just for current session.
+                            // saveEvents(); 
+                        }
+                    });
+                }
+                
+                // Reset triggered flags for the next minute to allow re-triggering if the app is kept open
+                // This approach simplifies persistence of triggered state. If a note needs only one reminder ever,
+                // a more robust state management is needed.
+                // It's crucial to iterate over a copy or be careful if modifying array while iterating.
+                // For this simple flag, direct modification is fine.
+                notesForToday && notesForToday.forEach(note => {
+                    // Reset if the minute has passed and it was triggered
+                    const [reminderHour, reminderMinute] = note.reminderTime ? note.reminderTime.split(':').map(Number) : [null, null];
+                    // Only reset if reminderTime is valid and the current time is strictly after the reminder time
+                    if (note.triggered && note.reminderTime && 
+                        (currentHour > reminderHour || (currentHour === reminderHour && currentMinute > reminderMinute))) {
+                        note.triggered = false;
+                    }
+                });
+
+
+            }, 10 * 1000); // Check every 10 seconds for more responsiveness
+        }
+
+        // --- Export/Import Functions ---
+        function exportData() {
+            const dataToExport = {
+                userSettings: userSettings,
+                userEvents: userEvents
+            };
+            const jsonString = JSON.stringify(dataToExport, null, 2); // Pretty print JSON
+
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const fileName = `shift_calendar_data_${year}-${month}-${day}.json`;
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href); // Clean up URL object
+            showMessageBox('پشتیبان‌گیری موفق', 'اطلاعات تقویم شما با موفقیت ذخیره شد.', () => { /* No specific action after message */ });
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                showMessageBox('خطا', 'لطفاً یک فایل JSON انتخاب کنید.');
+                return;
+            }
+
+            if (file.type !== 'application/json') {
+                showMessageBox('خطا', 'لطفاً فقط فایل‌های JSON را بارگذاری کنید.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    // Basic validation for required top-level keys
+                    if (!importedData.userSettings || !importedData.userEvents) {
+                        showMessageBox('خطا', 'ساختار فایل JSON نامعتبر است. فایل باید شامل "userSettings" و "userEvents" باشد.');
+                        return;
+                    }
+
+                    // Further validation for userSettings structure
+                    if (!importedData.userSettings.shiftCycleStart || !importedData.userSettings.dailyRoutines || 
+                        !Array.isArray(importedData.userSettings.customShiftTypes) || !Array.isArray(importedData.userSettings.customShiftCycle)) {
+                        showMessageBox('خطا', 'ساختار "userSettings" در فایل JSON نامعتبر است.');
+                        return;
+                    }
+
+                    // Validate customShiftCycle IDs against existing and imported custom types
+                    const tempAllShiftTypes = [...defaultShiftTypes, ...importedData.userSettings.customShiftTypes];
+                    const invalidCycleIds = importedData.userSettings.customShiftCycle.filter(id => !tempAllShiftTypes.some(s => s.id === id));
+                    if (invalidCycleIds.length > 0) {
+                         showMessageBox('خطا', `فایل حاوی شناسه‌های شیفت نامعتبر در سیکل کاری است: ${invalidCycleIds.join(', ')}.`);
+                         return;
+                    }
+                    
+                    // Confirmation before overwriting
+                    showMessageBox('تایید بارگذاری', 'آیا مطمئنید می‌خواهید اطلاعات فعلی را با این فایل جایگزین کنید؟ این عمل غیرقابل بازگشت است.', () => {
+                        userSettings = importedData.userSettings;
+                        userEvents = importedData.userEvents;
+
+                        // Ensure notes have 'triggered' flag for new imported data
+                        for (const dateKey in userEvents) {
+                            userEvents[dateKey] = userEvents[dateKey].map(note => {
+                                if (typeof note === 'string') { // Backward compatibility for old string-only notes
+                                    return { text: note, reminderTime: null, triggered: false };
+                                }
+                                return {
+                                    text: note.text,
+                                    reminderTime: note.reminderTime || null,
+                                    triggered: false // Reset triggered state on import
+                                };
+                            });
+                        }
+
+                        localStorage.setItem('shiftCalendarSettings', JSON.stringify(userSettings));
+                        localStorage.setItem('shiftCalendarEvents', JSON.stringify(userEvents));
+                        
+                        applySettings(); // Re-apply all settings from newly loaded data
+                        renderCalendar(); // Re-render calendar
+                        startReminderCheck(); // Restart reminder check with new data
+                        closeModal('settings-modal');
+                        showMessageBox('موفقیت‌آمیز', 'اطلاعات با موفقیت بارگذاری شد.');
+                    });
+
+                } catch (error) {
+                    console.error("Error importing data:", error);
+                    showMessageBox('خطا', 'فایل JSON نامعتبر است یا مشکلی در پردازش آن وجود دارد.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+
+        // Global Event Listeners
+        window.onload = function() {
+            initCalendar();
+
+            // Calendar Navigation Buttons
+            document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
+            document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
+            document.getElementById('prev-year').addEventListener('click', () => changeYear(-1));
+            document.getElementById('next-year').addEventListener('click', () => changeYear(1));
+            document.getElementById('go-to-today').addEventListener('click', goToToday);
+
+            // Settings Button
+            document.getElementById('open-settings').addEventListener('click', openSettingsModal);
+            document.getElementById('save-settings-button').addEventListener('click', saveSettings);
+            
+            // Summary Button
+            document.getElementById('open-summary').addEventListener('click', openSummaryModal);
+
+            // Routine Modal - Edit Shift Routine Button
+            document.getElementById('edit-shift-routine-button').addEventListener('click', () => {
+                const shiftIdToEdit = document.getElementById('edit-shift-routine-button').getAttribute('data-shift-id-to-edit');
+                closeModal('routine-modal');
+                openSettingsModal();
+                setTimeout(() => {
+                    const editor = document.getElementById(`routine-editor-${shiftIdToEdit}`);
+                    if (editor) {
+                        editor.focus();
+                        editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            });
+
+            // Routine Modal - Open Notes Modal Button
+            document.getElementById('open-notes-modal-button').addEventListener('click', (event) => {
+                const jalaliDate = event.target.getAttribute('data-jalali-date');
+                closeModal('routine-modal');
+                openNotesModal(jalaliDate);
+            });
+
+            // Notes Modal - Add Note Button
+            document.getElementById('add-note-button').addEventListener('click', addNote);
+
+            // Notes Modal - Delete Note Buttons (Delegation for dynamic buttons)
+            document.getElementById('notes-list').addEventListener('click', (event) => {
+                if (event.target.classList.contains('delete-note-button')) {
+                    const indexToDelete = parseInt(event.target.getAttribute('data-index'));
+                    deleteNote(indexToDelete);
+                }
+            });
+
+            // Custom Message Box close button
+            document.getElementById('message-box-close').addEventListener('click', closeMessageBox);
+
+            // New shift type management event listeners
+            document.getElementById('add-new-shift-type').addEventListener('click', addCustomShiftType);
+            document.getElementById('new-shift-color').addEventListener('input', (event) => {
+                document.querySelector('#new-shift-color + .color-display').style.backgroundColor = event.target.value;
+            });
+            // Update color display on initial load for the new shift color input
+            document.querySelector('#new-shift-color + .color-display').style.backgroundColor = document.getElementById('new-shift-color').value;
+
+            // Event listener for custom shift cycle input changes to update visual and text previews
+            document.getElementById('custom-shift-cycle-input').addEventListener('input', () => {
+                const customCycleInput = document.getElementById('custom-shift-cycle-input').value.trim();
+                let parsedCycle = customCycleInput.split(/[\n,]+/).map(item => item.trim()).filter(item => item !== '');
+                
+                // Validate parsedCycle before updating userSettings.customShiftCycle
+                const invalidIds = parsedCycle.filter(id => !allShiftTypes.some(s => s.id === id));
+                if (invalidIds.length === 0) {
+                    userSettings.customShiftCycle = parsedCycle;
+                    applySettings(); // Re-apply to update currentShiftCycleLength etc.
+                    syncAllCycleViews(); // Update all views after manual text input
+                } else {
+                    // Optionally, show a temporary message about invalid IDs here if not saving immediately
+                    console.warn(`Invalid shift IDs in text input: ${invalidIds.join(', ')}`);
+                }
+            });
+
+
+            // Export/Import buttons
+            document.getElementById('export-data-button').addEventListener('click', exportData);
+            document.getElementById('import-file-input').addEventListener('change', (event) => {
+                // Optionally show file name or ready state here
+            });
+            document.getElementById('import-data-button').addEventListener('click', () => {
+                const fileInput = document.getElementById('import-file-input');
+                if (fileInput.files.length > 0) {
+                    importData({ target: { files: [fileInput.files[0]] } });
+                } else {
+                    showMessageBox('خطا', 'لطفاً فایلی برای بارگذاری انتخاب کنید.');
+                }
+            });
+        };
+    </script>
+</body>
+</html>
